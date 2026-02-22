@@ -1,0 +1,21 @@
+{
+  "name": "voice-dev-agent",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Voice-first coding assistant built around OpenClaw, ACP, and guarded execution.",
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "build:deps": "pnpm --filter @voice-dev-agent/contracts build && pnpm --filter @voice-dev-agent/openclaw-bridge build && pnpm --filter @voice-dev-agent/voice build && pnpm --filter @voice-dev-agent/orchestrator build",
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter @voice-dev-agent/desktop dev",
+    "lint": "pnpm -r lint",
+    "test": "pnpm run build:deps && pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "clean": "pnpm -r clean"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2",
+    "vitest": "^2.1.9"
+  }
+}

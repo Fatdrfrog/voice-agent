@@ -1,0 +1,11 @@
+{
+  "workspaces": [
+    {
+      "id": "ice-core-ai",
+      "windowsPath": "C:\\Users\\User\\OneDrive\\Desktop\\indie\\ice-core-ai",
+      "wslPath": "/mnt/c/Users/User/OneDrive/Desktop/indie/ice-core-ai",
+      "defaultSessionKey": "agent:main:ice-core-ai",
+      "ideProfile": "zed"
+    }
+  ]
+}

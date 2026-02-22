@@ -1,0 +1,19 @@
+{
+  "name": "@voice-dev-agent/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "if exist dist rmdir /s /q dist"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
+  }
+}

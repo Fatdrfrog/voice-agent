@@ -1,0 +1,39 @@
+{
+  "name": "@voice-dev-agent/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.js",
+  "scripts": {
+    "build": "pnpm run build:deps && pnpm run build:renderer",
+    "build:deps": "pnpm --filter @voice-dev-agent/contracts build && pnpm --filter @voice-dev-agent/openclaw-bridge build && pnpm --filter @voice-dev-agent/orchestrator build && pnpm --filter @voice-dev-agent/voice build",
+    "build:renderer": "vite build",
+    "dev": "pnpm run build:deps && concurrently -k \"pnpm run dev:renderer\" \"pnpm run dev:electron\"",
+    "dev:renderer": "vite",
+    "dev:electron": "wait-on tcp:5173 && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron .",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "if exist dist rmdir /s /q dist"
+  },
+  "dependencies": {
+    "@voice-dev-agent/contracts": "workspace:*",
+    "@voice-dev-agent/orchestrator": "workspace:*",
+    "@voice-dev-agent/voice": "workspace:*",
+    "dotenv": "^16.4.7",
+    "electron": "^35.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.0",
+    "vitest": "^2.1.9",
+    "wait-on": "^8.0.2"
+  }
+}

@@ -1,0 +1,10 @@
+﻿node_modules/
+dist/
+coverage/
+*.log
+.env
+.env.local
+.env.*.local
+.vscode/
+.DS_Store
+pnpm-lock.yaml
