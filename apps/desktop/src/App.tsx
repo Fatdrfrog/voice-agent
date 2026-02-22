@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { AcpSnippet, VoiceEvent, WorkspaceConfig } from "@voice-dev-agent/contracts";
+import type { AcpSnippet, FeatureFlags, VoiceEvent, WorkspaceConfig } from "@voice-dev-agent/contracts";
 
 import { useMicrophone } from "./hooks/useMicrophone";
 
@@ -26,6 +26,11 @@ export function App() {
   const [allowlistInput, setAllowlistInput] = useState("");
   const [callId, setCallId] = useState("");
   const [acpSnippets, setAcpSnippets] = useState<AcpSnippet[]>([]);
+  const [featureFlags, setFeatureFlags] = useState<FeatureFlags>({
+    micMode: true,
+    callMode: false,
+    autoExecGuarded: true
+  });
   const [isListening, setIsListening] = useState(false);
   const [statusMessage, setStatusMessage] = useState("Idle");
 
@@ -48,6 +53,10 @@ export function App() {
 
     void window.voiceApi.getAcpSnippets().then((snippets) => {
       setAcpSnippets(snippets);
+    });
+
+    void window.voiceApi.getFeatureFlags().then((flags) => {
+      setFeatureFlags(flags);
     });
   }, []);
 
@@ -75,6 +84,10 @@ export function App() {
   }, [events]);
 
   async function handleStartListening(): Promise<void> {
+    if (!featureFlags.micMode) {
+      setStatusMessage("Microphone mode is disabled.");
+      return;
+    }
     await window.voiceApi.startListening();
     await startMic();
     setIsListening(true);
@@ -96,6 +109,10 @@ export function App() {
   }
 
   async function handleResume(): Promise<void> {
+    if (!featureFlags.micMode) {
+      setStatusMessage("Microphone mode is disabled.");
+      return;
+    }
     await startMic();
     await window.voiceApi.resumeListening();
     setStatusMessage("Listening");
@@ -144,7 +161,7 @@ export function App() {
         <article className="panel">
           <h2>Voice Controls</h2>
           <div className="actions">
-            <button onClick={() => void handleStartListening()} disabled={isListening}>
+            <button onClick={() => void handleStartListening()} disabled={isListening || !featureFlags.micMode}>
               Start Listening
             </button>
             <button onClick={() => void handleStopListening()} disabled={!isListening}>
@@ -153,10 +170,13 @@ export function App() {
             <button onClick={() => void handlePause()} disabled={!isListening}>
               Pause
             </button>
-            <button onClick={() => void handleResume()} disabled={!isListening}>
+            <button onClick={() => void handleResume()} disabled={!isListening || !featureFlags.micMode}>
               Resume
             </button>
           </div>
+          {!featureFlags.micMode ? (
+            <p>Microphone mode is disabled by runtime flags.</p>
+          ) : null}
           <textarea
             value={transcriptInput}
             onChange={(event) => setTranscriptInput(event.target.value)}
@@ -218,22 +238,24 @@ export function App() {
           </div>
         </article>
 
-        <article className="panel">
-          <h2>Call Diagnostics</h2>
-          <input
-            value={callId}
-            onChange={(event) => setCallId(event.target.value)}
-            placeholder="OpenClaw callId"
-          />
-          <div className="actions">
-            <button onClick={() => void window.voiceApi.getCallStatus(callId)} disabled={!callId.trim()}>
-              Get Call Status
-            </button>
-            <button onClick={() => void window.voiceApi.endCall(callId)} disabled={!callId.trim()}>
-              End Call
-            </button>
-          </div>
-        </article>
+        {featureFlags.callMode ? (
+          <article className="panel">
+            <h2>Call Diagnostics</h2>
+            <input
+              value={callId}
+              onChange={(event) => setCallId(event.target.value)}
+              placeholder="OpenClaw callId"
+            />
+            <div className="actions">
+              <button onClick={() => void window.voiceApi.getCallStatus(callId)} disabled={!callId.trim()}>
+                Get Call Status
+              </button>
+              <button onClick={() => void window.voiceApi.endCall(callId)} disabled={!callId.trim()}>
+                End Call
+              </button>
+            </div>
+          </article>
+        ) : null}
       </section>
 
       <section className="panel events-panel">

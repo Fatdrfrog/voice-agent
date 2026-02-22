@@ -196,11 +196,19 @@ export class VoiceOrchestrator extends EventEmitter {
   }
 
   public async getCallStatus(callId: string): Promise<void> {
+    if (!this.config.featureFlags.callMode) {
+      this.emitVoiceEvent("state.changed", { message: "Call mode is disabled." });
+      return;
+    }
     const status = await this.bridge.callStatus(callId);
     this.emitVoiceEvent("call.status", status);
   }
 
   public async endCall(callId: string): Promise<void> {
+    if (!this.config.featureFlags.callMode) {
+      this.emitVoiceEvent("state.changed", { message: "Call mode is disabled." });
+      return;
+    }
     const output = await this.bridge.endCall(callId);
     this.emitVoiceEvent("state.changed", { callEnd: output });
   }
@@ -255,9 +263,9 @@ export class VoiceOrchestrator extends EventEmitter {
         this.emitVoiceEvent("state.changed", { message: "Pending action canceled." });
         return;
       case "call_status":
-        this.emitVoiceEvent("state.changed", {
-          message: "Call status requires call ID in the UI diagnostics panel."
-        });
+        this.emitVoiceEvent("state.changed", this.config.featureFlags.callMode
+          ? { message: "Call status requires call ID in the UI diagnostics panel." }
+          : { message: "Call mode is disabled." });
         return;
       default:
         this.emitVoiceEvent("error", { message: `Unhandled control intent: ${intent}` });

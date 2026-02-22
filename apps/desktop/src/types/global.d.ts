@@ -1,4 +1,4 @@
-import type { AcpSnippet, VoiceEvent, WorkspaceConfig } from "@voice-dev-agent/contracts";
+import type { AcpSnippet, FeatureFlags, VoiceEvent, WorkspaceConfig } from "@voice-dev-agent/contracts";
 
 declare global {
   interface Window {
@@ -18,6 +18,7 @@ declare global {
       removeAllowlist(pattern: string): Promise<void>;
       fetchApprovals(): Promise<void>;
       getAcpSnippets(): Promise<AcpSnippet[]>;
+      getFeatureFlags(): Promise<FeatureFlags>;
       getCallStatus(callId: string): Promise<void>;
       endCall(callId: string): Promise<void>;
       onVoiceEvent(handler: (event: VoiceEvent) => void): () => void;

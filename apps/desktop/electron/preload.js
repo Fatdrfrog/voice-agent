@@ -16,6 +16,7 @@ const api = {
   removeAllowlist: (pattern) => ipcRenderer.invoke("allowlist:remove", pattern),
   fetchApprovals: () => ipcRenderer.invoke("approvals:fetch"),
   getAcpSnippets: () => ipcRenderer.invoke("acp:snippets"),
+  getFeatureFlags: () => ipcRenderer.invoke("feature-flags:get"),
   getCallStatus: (callId) => ipcRenderer.invoke("call:status", callId),
   endCall: (callId) => ipcRenderer.invoke("call:end", callId),
   onVoiceEvent: (handler) => {

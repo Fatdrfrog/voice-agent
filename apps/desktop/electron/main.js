@@ -28,7 +28,28 @@ function getRequiredEnv(name: string): string {
   return value;
 }
 
+function getBooleanEnv(name: string, fallback: boolean): boolean {
+  const value = process.env[name];
+  if (!value) {
+    return fallback;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on") {
+    return true;
+  }
+  if (normalized === "0" || normalized === "false" || normalized === "no" || normalized === "off") {
+    return false;
+  }
+
+  return fallback;
+}
+
 function buildConfig(): AppConfig {
+  const micMode = getBooleanEnv("VOICE_DEV_AGENT_MIC_MODE", true);
+  const callMode = getBooleanEnv("VOICE_DEV_AGENT_CALL_MODE", false);
+  const autoExecGuarded = getBooleanEnv("VOICE_DEV_AGENT_AUTO_EXEC_GUARDED", true);
+
   const workspacesFilePath = process.env.VOICE_DEV_AGENT_WORKSPACES
     ? path.resolve(appRoot, process.env.VOICE_DEV_AGENT_WORKSPACES)
     : path.resolve(appRoot, "config/workspaces.json");
@@ -59,15 +80,15 @@ function buildConfig(): AppConfig {
       confirmationRequiredPatterns: ["delete", "remove", "drop database", "reset"]
     }),
     callPolicy: {
-      inboundPolicy: "allowlist",
+      inboundPolicy: callMode ? "allowlist" : "disabled",
       allowFrom: [],
       responseSystemPromptRef: "docs/prompts/call-system-prompt.md",
       twilioConfigRef: "docs/config/twilio.md"
     },
     featureFlags: featureFlagsSchema.parse({
-      micMode: true,
-      callMode: true,
-      autoExecGuarded: true
+      micMode,
+      callMode,
+      autoExecGuarded
     }),
     workspacesFilePath
   });
@@ -205,6 +226,7 @@ ipcMain.handle("approvals:fetch", async () => {
   await orchestrator.fetchApprovalsSnapshot();
 });
 ipcMain.handle("acp:snippets", () => orchestrator.getAcpSnippets());
+ipcMain.handle("feature-flags:get", () => config.featureFlags);
 ipcMain.handle("call:status", async (_event, callId: string) => {
   await orchestrator.getCallStatus(callId);
 });

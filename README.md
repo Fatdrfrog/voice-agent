@@ -5,6 +5,7 @@ Voice-first coding assistant built around OpenClaw, ACP, OpenAI Realtime STT, an
 ## Quick Start
 
 1. Copy `.env.example` to `.env` and fill API keys and gateway settings.
+   - Mic-only mode default: `VOICE_DEV_AGENT_CALL_MODE=false`
 2. Configure workspace allowlist in `config/workspaces.json`.
 3. Install dependencies:
    - `pnpm install`
@@ -21,10 +22,10 @@ Voice-first coding assistant built around OpenClaw, ACP, OpenAI Realtime STT, an
 - `config/workspaces.json`: explicit workspace allowlist.
 - `docs/`: setup and operations runbooks.
 
-## Required Runbooks
+## Runbooks
 
 - `docs/wsl-gateway-bootstrap.md`
 - `docs/acp-setup.md`
-- `docs/twilio-voice-call-setup.md`
 - `docs/safety-policy.md`
 - `docs/operations.md`
+- Optional when enabling calls: `docs/twilio-voice-call-setup.md`

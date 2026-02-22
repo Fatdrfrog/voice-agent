@@ -22,7 +22,7 @@ export type WorkspacesFile = z.infer<typeof workspacesFileSchema>;
 
 export const featureFlagsSchema = z.object({
   micMode: z.boolean().default(true),
-  callMode: z.boolean().default(true),
+  callMode: z.boolean().default(false),
   autoExecGuarded: z.boolean().default(true)
 });
 export type FeatureFlags = z.infer<typeof featureFlagsSchema>;
@@ -61,7 +61,7 @@ export const executionPolicySchema = z.object({
 export type ExecutionPolicy = z.infer<typeof executionPolicySchema>;
 
 export const callPolicySchema = z.object({
-  inboundPolicy: z.enum(["disabled", "allowlist", "pairing", "open"]).default("allowlist"),
+  inboundPolicy: z.enum(["disabled", "allowlist", "pairing", "open"]).default("disabled"),
   allowFrom: z.array(z.string()).default([]),
   responseSystemPromptRef: z.string().min(1),
   twilioConfigRef: z.string().min(1)
