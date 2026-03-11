@@ -7,6 +7,7 @@ Voice-first coding assistant built around OpenClaw, ACP, configurable realtime S
 1. Copy `.env.example` to `.env` and fill API keys and gateway settings.
    - Mic-only mode default: `VOICE_DEV_AGENT_CALL_MODE=false`
    - STT default: `VOICE_DEV_AGENT_STT_PROVIDER=openai-realtime`
+   - If OpenClaw runs inside WSL on Windows, set `OPENCLAW_WSL_DISTRO=<your distro name>`
 2. Configure workspace allowlist in `config/workspaces.json`.
 3. Install dependencies:
    - `pnpm install`
@@ -25,7 +26,6 @@ Voice-first coding assistant built around OpenClaw, ACP, configurable realtime S
 
 ## Runbooks
 
-- `docs/wsl-gateway-bootstrap.md`
 - `docs/acp-setup.md`
 - `docs/safety-policy.md`
 - `docs/operations.md`

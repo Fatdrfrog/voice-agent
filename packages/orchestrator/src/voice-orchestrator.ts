@@ -3,10 +3,11 @@ import { EventEmitter } from "node:events";
 import type {
   AgentTurnRequest,
   AppConfig,
+  ControlIntent,
   VoiceEvent,
   WorkspaceConfig
 } from "@voice-dev-agent/contracts";
-import { OpenClawBridge } from "@voice-dev-agent/openclaw-bridge";
+import { OpenClawBridge, type OpenClawBridgeConfig } from "@voice-dev-agent/openclaw-bridge";
 
 import { buildAcpSnippets } from "./acp-snippets.js";
 import { parseControlIntent } from "./control-intent-parser.js";
@@ -19,6 +20,9 @@ interface PendingAction {
   text: string;
 }
 
+/**
+ * Coordinates transcript handling, policy checks, workspace state, and OpenClaw handoff.
+ */
 export class VoiceOrchestrator extends EventEmitter {
   private readonly bridge: OpenClawBridge;
   private readonly workspaceRegistry: WorkspaceRegistry;
@@ -30,18 +34,17 @@ export class VoiceOrchestrator extends EventEmitter {
   private paused = false;
   private pendingAction: PendingAction | null = null;
 
+  /**
+   * Builds the workspace/session state and the OpenClaw bridge used by the desktop app.
+   */
   public constructor(config: AppConfig) {
     super();
     this.config = config;
     this.workspaceRegistry = new WorkspaceRegistry(config.workspacesFilePath);
-    this.sessionManager = new SessionManager(this.workspaceRegistry.list());
-    const bridgeConfig: {
-      binary: string;
-      gatewayUrl: string;
-      retries: number;
-      defaultTimeoutMs: number;
-      gatewayToken?: string;
-    } = {
+    const workspaces = this.workspaceRegistry.list();
+    this.sessionManager = new SessionManager(workspaces);
+
+    const bridgeConfig: Partial<OpenClawBridgeConfig> = {
       binary: config.gateway.binary,
       gatewayUrl: config.gateway.gatewayUrl,
       retries: 1,
@@ -54,24 +57,36 @@ export class VoiceOrchestrator extends EventEmitter {
 
     this.bridge = new OpenClawBridge(bridgeConfig);
 
-    this.currentWorkspaceId = this.workspaceRegistry.list()[0]?.id ?? "";
+    this.currentWorkspaceId = workspaces[0]?.id ?? "";
   }
 
+  /**
+   * Returns the currently selected workspace configuration.
+   */
   public getCurrentWorkspace(): WorkspaceConfig {
     return this.workspaceRegistry.get(this.currentWorkspaceId);
   }
 
+  /**
+   * Lists all configured workspaces exposed to the app.
+   */
   public listWorkspaces(): WorkspaceConfig[] {
     return this.workspaceRegistry.list();
   }
 
+  /**
+   * Emits normalized gateway health details for the UI diagnostics surface.
+   */
   public async getGatewayHealth(): Promise<void> {
     const health = await this.bridge.getHealth();
-    this.emitVoiceEvent("state.changed", {
+    this.emitStateChanged({
       health
     });
   }
 
+  /**
+   * Collects OpenClaw status output and publishes it as a single state update event.
+   */
   public async getGatewayStatus(): Promise<void> {
     const [status, plugins, nodes] = await Promise.all([
       this.bridge.getStatus(),
@@ -84,55 +99,61 @@ export class VoiceOrchestrator extends EventEmitter {
       })
     ]);
 
-    this.emitVoiceEvent("state.changed", {
+    this.emitStateChanged({
       status,
       plugins,
       nodes
     });
   }
 
+  /**
+   * Marks the orchestrator as actively listening and not paused.
+   */
   public startListening(): void {
     this.listening = true;
     this.paused = false;
-    this.emitVoiceEvent("state.changed", {
-      listening: this.listening,
-      paused: this.paused
-    });
+    this.emitListeningState();
   }
 
+  /**
+   * Marks the orchestrator as no longer listening and clears paused state.
+   */
   public stopListening(): void {
     this.listening = false;
     this.paused = false;
-    this.emitVoiceEvent("state.changed", {
-      listening: this.listening,
-      paused: this.paused
-    });
+    this.emitListeningState();
   }
 
+  /**
+   * Preserves the listening session while pausing transcript processing.
+   */
   public pause(): void {
     this.paused = true;
-    this.emitVoiceEvent("state.changed", {
-      listening: this.listening,
-      paused: this.paused
-    });
+    this.emitListeningState();
   }
 
+  /**
+   * Resumes transcript handling after a paused period.
+   */
   public resume(): void {
     this.paused = false;
-    this.emitVoiceEvent("state.changed", {
-      listening: this.listening,
-      paused: this.paused
-    });
+    this.emitListeningState();
   }
 
+  /**
+   * Switches the active workspace after validating that the requested id exists.
+   */
   public switchWorkspace(workspaceId: string): void {
     this.workspaceRegistry.get(workspaceId);
     this.currentWorkspaceId = workspaceId;
-    this.emitVoiceEvent("state.changed", {
+    this.emitStateChanged({
       workspaceId: this.currentWorkspaceId
     });
   }
 
+  /**
+   * Handles a finalized transcript by resolving control intents, approvals, or agent turns.
+   */
   public async handleTranscript(text: string): Promise<void> {
     const transcript = text.trim();
     if (!transcript) {
@@ -174,71 +195,95 @@ export class VoiceOrchestrator extends EventEmitter {
     await this.runAgentTurn(this.currentWorkspaceId, transcript, "voice");
   }
 
+  /**
+   * Adds a command pattern to the OpenClaw approvals allowlist and emits the updated output.
+   */
   public async addAllowlistCommand(commandPattern: string): Promise<void> {
     const output = await this.bridge.addAllowlistEntry(commandPattern, "*");
-    this.emitVoiceEvent("state.changed", {
+    this.emitStateChanged({
       allowlist: output
     });
   }
 
+  /**
+   * Removes a command pattern from the OpenClaw approvals allowlist.
+   */
   public async removeAllowlistCommand(commandPattern: string): Promise<void> {
     const output = await this.bridge.removeAllowlistEntry(commandPattern, "*");
-    this.emitVoiceEvent("state.changed", {
+    this.emitStateChanged({
       allowlist: output
     });
   }
 
+  /**
+   * Fetches the current approvals snapshot for diagnostics and auditing.
+   */
   public async fetchApprovalsSnapshot(): Promise<void> {
     const output = await this.bridge.getApprovalsSnapshot();
-    this.emitVoiceEvent("state.changed", {
+    this.emitStateChanged({
       approvals: output
     });
   }
 
+  /**
+   * Requests the status of an active call when call mode is enabled.
+   */
   public async getCallStatus(callId: string): Promise<void> {
-    if (!this.config.featureFlags.callMode) {
-      this.emitVoiceEvent("state.changed", { message: "Call mode is disabled." });
+    if (!this.ensureCallModeEnabled()) {
       return;
     }
+
     const status = await this.bridge.callStatus(callId);
     this.emitVoiceEvent("call.status", status);
   }
 
+  /**
+   * Ends an active call when the runtime is configured for call mode.
+   */
   public async endCall(callId: string): Promise<void> {
-    if (!this.config.featureFlags.callMode) {
-      this.emitVoiceEvent("state.changed", { message: "Call mode is disabled." });
+    if (!this.ensureCallModeEnabled()) {
       return;
     }
+
     const output = await this.bridge.endCall(callId);
-    this.emitVoiceEvent("state.changed", { callEnd: output });
+    this.emitStateChanged({ callEnd: output });
   }
 
+  /**
+   * Returns ACP connection snippets for the currently selected workspace.
+   */
   public getAcpSnippets(): ReturnType<typeof buildAcpSnippets> {
     const workspace = this.getCurrentWorkspace();
     return buildAcpSnippets(workspace, this.config.gateway.gatewayUrl, this.config.gateway.gatewayToken);
   }
 
+  /**
+   * Checks whether a Windows path is inside the configured workspace allowlist.
+   */
   public isWindowsPathAllowed(targetPath: string): boolean {
     return this.workspaceRegistry.isWindowsPathAllowed(targetPath);
   }
 
-  private async handleControlIntent(intent: import("@voice-dev-agent/contracts").ControlIntent, workspaceId?: string): Promise<void> {
+  /**
+   * Resolves voice control commands like confirm, cancel, status, and workspace switching.
+   */
+  private async handleControlIntent(intent: ControlIntent, workspaceId?: string): Promise<void> {
     switch (intent) {
       case "start_listening":
         this.startListening();
-        this.emitVoiceEvent("state.changed", { message: "Listening started." });
+        this.emitStateChanged({ message: "Listening started." });
         return;
       case "stop_listening":
         this.stopListening();
-        this.emitVoiceEvent("state.changed", { message: "Listening stopped." });
+        this.emitStateChanged({ message: "Listening stopped." });
         return;
       case "pause":
         this.pause();
-        this.emitVoiceEvent("state.changed", { message: "Listening paused." });
+        this.emitStateChanged({ message: "Listening paused." });
         return;
       case "resume":
         this.resume();
-        this.emitVoiceEvent("state.changed", { message: "Listening resumed." });
+        this.emitStateChanged({ message: "Listening resumed." });
         return;
       case "status":
         await this.getGatewayStatus();
@@ -252,7 +297,7 @@ export class VoiceOrchestrator extends EventEmitter {
         return;
       case "confirm":
         if (!this.pendingAction) {
-          this.emitVoiceEvent("state.changed", { message: "No pending action to confirm." });
+          this.emitStateChanged({ message: "No pending action to confirm." });
           return;
         }
         await this.runAgentTurn(this.pendingAction.workspaceId, this.pendingAction.text, "voice");
@@ -260,10 +305,10 @@ export class VoiceOrchestrator extends EventEmitter {
         return;
       case "cancel":
         this.pendingAction = null;
-        this.emitVoiceEvent("state.changed", { message: "Pending action canceled." });
+        this.emitStateChanged({ message: "Pending action canceled." });
         return;
       case "call_status":
-        this.emitVoiceEvent("state.changed", this.config.featureFlags.callMode
+        this.emitStateChanged(this.config.featureFlags.callMode
           ? { message: "Call status requires call ID in the UI diagnostics panel." }
           : { message: "Call mode is disabled." });
         return;
@@ -272,6 +317,9 @@ export class VoiceOrchestrator extends EventEmitter {
     }
   }
 
+  /**
+   * Executes one agent turn for the target workspace and emits either a reply or a normalized error.
+   */
   private async runAgentTurn(
     workspaceId: string,
     text: string,
@@ -293,6 +341,38 @@ export class VoiceOrchestrator extends EventEmitter {
     }
   }
 
+  /**
+   * Emits the current listening and paused flags as a single state update payload.
+   */
+  private emitListeningState(): void {
+    this.emitStateChanged({
+      listening: this.listening,
+      paused: this.paused
+    });
+  }
+
+  /**
+   * Emits a `state.changed` voice event with the active workspace/session context attached.
+   */
+  private emitStateChanged(payload: Record<string, unknown>): void {
+    this.emitVoiceEvent("state.changed", payload);
+  }
+
+  /**
+   * Guards call-specific operations when the runtime is configured for microphone-only mode.
+   */
+  private ensureCallModeEnabled(): boolean {
+    if (this.config.featureFlags.callMode) {
+      return true;
+    }
+
+    this.emitStateChanged({ message: "Call mode is disabled." });
+    return false;
+  }
+
+  /**
+   * Stamps payloads with session metadata before forwarding them to orchestrator listeners.
+   */
   private emitVoiceEvent(type: VoiceEvent["type"], payload: unknown): void {
     const event: VoiceEvent = {
       type,
@@ -305,4 +385,3 @@ export class VoiceOrchestrator extends EventEmitter {
     this.emit("voice:event", event);
   }
 }
-

@@ -38,4 +38,19 @@ openclaw approvals get
 
 ## ACL Hardening (Windows Native OpenClaw)
 
-Use `scripts/fix-openclaw-acl.ps1` and rerun `openclaw security audit`.
+Run the ACL repair manually, then rerun `openclaw security audit`.
+
+```powershell
+$openClawRoot = Join-Path $env:USERPROFILE ".openclaw"
+$cred = Join-Path $openClawRoot "credentials"
+
+if (Test-Path $cred) {
+  icacls "$cred" /inheritance:r /grant:r "$env:USERNAME:(OI)(CI)F" /grant:r "SYSTEM:(OI)(CI)F"
+}
+
+if (Test-Path $openClawRoot) {
+  icacls "$openClawRoot" /inheritance:r /grant:r "$env:USERNAME:(OI)(CI)F" /grant:r "SYSTEM:(OI)(CI)F"
+}
+
+openclaw security audit
+```

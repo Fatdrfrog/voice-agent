@@ -19,9 +19,15 @@ import {
 const DEFAULT_TIMEOUT_MS = 20_000;
 const DEFAULT_RETRIES = 1;
 
+/**
+ * Wraps the OpenClaw CLI behind a typed API for the desktop app and orchestrator.
+ */
 export class OpenClawBridge {
   private readonly config: OpenClawBridgeConfig;
 
+  /**
+   * Normalizes bridge configuration and rejects incomplete startup state early.
+   */
   public constructor(config: Partial<OpenClawBridgeConfig>) {
     if (!config.binary) {
       throw new BridgeError("CONFIG_ERROR", "OpenClaw binary path is required.");
@@ -46,6 +52,9 @@ export class OpenClawBridge {
     this.config = normalized;
   }
 
+  /**
+   * Executes a single OpenClaw agent turn and maps the JSON reply into app contracts.
+   */
   public async agentTurn(request: AgentTurnRequest): Promise<AgentTurnResponse> {
     const result = await this.runAgentTurnCommand(request);
     const payload = this.parseJson<Record<string, unknown>>(result.stdout);
@@ -62,6 +71,9 @@ export class OpenClawBridge {
     return agentTurnResponseSchema.parse(normalized);
   }
 
+  /**
+   * Chooses the correct CLI form for a turn based on the stable session key shape.
+   */
   private async runAgentTurnCommand(request: AgentTurnRequest): Promise<CommandResult> {
     const agentId = this.extractAgentIdFromSessionKey(request.sessionKey);
     if (agentId) {
@@ -76,6 +88,9 @@ export class OpenClawBridge {
     );
   }
 
+  /**
+   * Checks whether the configured OpenClaw gateway is reachable and returns a normalized health object.
+   */
   public async getHealth(): Promise<OpenClawHealth> {
     const args = ["gateway", "health", "--url", this.config.gatewayUrl];
     const token = this.config.gatewayToken;
@@ -100,21 +115,30 @@ export class OpenClawBridge {
     }
   }
 
+  /**
+   * Returns the plain-text output of `openclaw status`.
+   */
   public async getStatus(): Promise<string> {
-    const result = await this.runWithRetry(["status"], { timeoutMs: 40_000 });
-    return sanitizeCliText(result.stdout);
+    return this.runTextCommand(["status"], { timeoutMs: 40_000 });
   }
 
+  /**
+   * Lists enabled OpenClaw plugins for diagnostics and setup checks.
+   */
   public async listPlugins(): Promise<string> {
-    const result = await this.runWithRetry(["plugins", "list"], { timeoutMs: 40_000 });
-    return sanitizeCliText(result.stdout);
+    return this.runTextCommand(["plugins", "list"], { timeoutMs: 40_000 });
   }
 
+  /**
+   * Returns node/provider status from OpenClaw for operational visibility.
+   */
   public async listNodesStatus(): Promise<string> {
-    const result = await this.runWithRetry(["nodes", "status"], { timeoutMs: 40_000 });
-    return sanitizeCliText(result.stdout);
+    return this.runTextCommand(["nodes", "status"], { timeoutMs: 40_000 });
   }
 
+  /**
+   * Fetches OpenClaw voice-call status and preserves the raw payload for debugging.
+   */
   public async callStatus(callId: string): Promise<CallStatusResponse> {
     const result = await this.runWithRetry(
       ["voicecall", "status", "--call-id", callId, "--json"],
@@ -129,30 +153,57 @@ export class OpenClawBridge {
     };
   }
 
+  /**
+   * Ends an OpenClaw-managed voice call and returns the CLI confirmation text.
+   */
   public async endCall(callId: string): Promise<string> {
-    const result = await this.runWithRetry(["voicecall", "end", "--call-id", callId], {
-      timeoutMs: 30_000
+    return this.runTextCommand(["voicecall", "end", "--call-id", callId], {
+      timeoutMs: 30_000,
+      includeStderrFallback: true
     });
-    return sanitizeCliText(result.stdout || result.stderr);
   }
 
+  /**
+   * Adds an approvals allowlist entry for a specific agent or for all agents.
+   */
   public async addAllowlistEntry(commandPattern: string, agent = "*"): Promise<string> {
-    const args = ["approvals", "allowlist", "add", "--agent", agent, commandPattern];
-    const result = await this.runWithRetry(args, { timeoutMs: 30_000 });
-    return sanitizeCliText(result.stdout || result.stderr);
+    return this.runTextCommand(["approvals", "allowlist", "add", "--agent", agent, commandPattern], {
+      timeoutMs: 30_000,
+      includeStderrFallback: true
+    });
   }
 
+  /**
+   * Removes an approvals allowlist entry for a specific agent or for all agents.
+   */
   public async removeAllowlistEntry(commandPattern: string, agent = "*"): Promise<string> {
-    const args = ["approvals", "allowlist", "remove", "--agent", agent, commandPattern];
-    const result = await this.runWithRetry(args, { timeoutMs: 30_000 });
-    return sanitizeCliText(result.stdout || result.stderr);
+    return this.runTextCommand(["approvals", "allowlist", "remove", "--agent", agent, commandPattern], {
+      timeoutMs: 30_000,
+      includeStderrFallback: true
+    });
   }
 
+  /**
+   * Reads the current approvals snapshot so the UI can surface policy state.
+   */
   public async getApprovalsSnapshot(): Promise<string> {
-    const result = await this.runWithRetry(["approvals", "get"], { timeoutMs: 30_000 });
-    return sanitizeCliText(result.stdout);
+    return this.runTextCommand(["approvals", "get"], { timeoutMs: 30_000 });
   }
 
+  /**
+   * Runs a text-oriented CLI command and returns sanitized stdout, with optional stderr fallback.
+   */
+  private async runTextCommand(
+    args: string[],
+    options: { timeoutMs: number; includeStderrFallback?: boolean }
+  ): Promise<string> {
+    const result = await this.runWithRetry(args, { timeoutMs: options.timeoutMs });
+    return sanitizeCliText(options.includeStderrFallback ? result.stdout || result.stderr : result.stdout);
+  }
+
+  /**
+   * Extracts the JSON portion of mixed CLI output and wraps parser failures in a bridge error.
+   */
   private parseJson<T>(text: string): T {
     try {
       return extractJsonFromMixedOutput<T>(sanitizeCliText(text));
@@ -162,6 +213,9 @@ export class OpenClawBridge {
     }
   }
 
+  /**
+   * Infers a coarse risk level from the agent response text for downstream UI hints.
+   */
   private inferRiskLevel(text: string): "low" | "medium" | "high" {
     const normalized = text.toLowerCase();
     if (/\brm\s+-rf\b|\bdel\s+\/f\b|\bformat\b|\bshutdown\b/.test(normalized)) {
@@ -175,6 +229,9 @@ export class OpenClawBridge {
     return "low";
   }
 
+  /**
+   * Pulls the best available human-readable reply text from OpenClaw's variable JSON shapes.
+   */
   private extractAgentText(payload: Record<string, unknown>): string {
     const response = payload.response;
     if (typeof response === "string" && response.trim()) {
@@ -210,6 +267,9 @@ export class OpenClawBridge {
     return "";
   }
 
+  /**
+   * Finds an optional tool summary from either the top-level or nested result payload.
+   */
   private extractToolSummary(payload: Record<string, unknown>): string | undefined {
     const direct = payload.toolSummary;
     if (typeof direct === "string" && direct.trim()) {
@@ -225,11 +285,17 @@ export class OpenClawBridge {
     return typeof nested === "string" && nested.trim() ? nested.trim() : undefined;
   }
 
+  /**
+   * Derives the agent id from session keys shaped like `agent:<id>:<workspace>`.
+   */
   private extractAgentIdFromSessionKey(sessionKey: string): string | null {
     const match = /^agent:([^:]+):/.exec(sessionKey);
     return match?.[1] ?? null;
   }
 
+  /**
+   * Retries transient CLI failures before surfacing the final bridge error.
+   */
   private async runWithRetry(
     args: string[],
     options: { timeoutMs?: number; retries?: number }
@@ -256,15 +322,15 @@ export class OpenClawBridge {
     );
   }
 
+  /**
+   * Spawns the OpenClaw CLI with gateway context injected into the child environment.
+   */
   private runCommand(args: string[], timeoutMs: number): Promise<CommandResult> {
     return new Promise((resolve, reject) => {
       const env: NodeJS.ProcessEnv = {
-        ...process.env
+        ...process.env,
+        OPENCLAW_GATEWAY_URL: this.config.gatewayUrl
       };
-
-      if (this.config.gatewayUrl) {
-        env.OPENCLAW_GATEWAY_URL = this.config.gatewayUrl;
-      }
 
       if (this.config.gatewayToken) {
         env.OPENCLAW_GATEWAY_TOKEN = this.config.gatewayToken;
@@ -354,10 +420,16 @@ export class OpenClawBridge {
     });
   }
 
+  /**
+   * Builds a single shell-safe command string for Windows `shell: true` execution.
+   */
   private buildWindowsShellCommand(binary: string, args: string[]): string {
     return [binary, ...args].map((part) => this.quoteWindowsShellArg(part)).join(" ");
   }
 
+  /**
+   * Quotes a Windows shell argument when whitespace or quotes would otherwise break parsing.
+   */
   private quoteWindowsShellArg(value: string): string {
     if (!value) {
       return "\"\"";
@@ -370,6 +442,9 @@ export class OpenClawBridge {
     return `"${value.replace(/"/g, '\\"')}"`;
   }
 
+  /**
+   * Reduces noisy CLI output to the last few meaningful lines for surfaced errors.
+   */
   private extractFailureDetail(stdout: string, stderr: string): string {
     const normalized = sanitizeCliText(stderr || stdout);
     if (!normalized) {
