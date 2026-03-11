@@ -103,27 +103,27 @@ function buildConfig() {
     sttProvider,
     openAiRealtime: sttProvider === "openai-realtime"
       ? {
-          apiKey: getRequiredEnv("OPENAI_API_KEY"),
-          model: process.env.OPENAI_REALTIME_MODEL ?? "gpt-4o-mini-transcribe",
-          sampleRateHz: 24_000
-        }
+        apiKey: getRequiredEnv("OPENAI_API_KEY"),
+        model: process.env.OPENAI_REALTIME_MODEL ?? "gpt-4o-mini-transcribe",
+        sampleRateHz: 24_000
+      }
       : undefined,
     elevenLabsScribe: sttProvider === "elevenlabs-scribe"
       ? {
-          apiKey: getRequiredEnv("ELEVENLABS_API_KEY"),
-          modelId: process.env.ELEVENLABS_SCRIBE_MODEL_ID ?? "scribe_v2_realtime",
-          wsUrl: process.env.ELEVENLABS_SCRIBE_WS_URL ?? "wss://api.elevenlabs.io/v1/speech-to-text/realtime",
-          languageCode: process.env.ELEVENLABS_SCRIBE_LANGUAGE_CODE,
-          includeTimestamps: getBooleanEnv("ELEVENLABS_SCRIBE_INCLUDE_TIMESTAMPS", true),
-          includeLanguageDetection: getBooleanEnv("ELEVENLABS_SCRIBE_INCLUDE_LANGUAGE_DETECTION", true),
-          sampleRateHz: 24_000,
-          audioFormat: process.env.ELEVENLABS_SCRIBE_AUDIO_FORMAT ?? "pcm_24000",
-          commitStrategy: getScribeCommitStrategy(),
-          vadSilenceThresholdSecs: getNumberEnv("ELEVENLABS_SCRIBE_VAD_SILENCE_THRESHOLD_SECS", 0.45),
-          vadThreshold: getNumberEnv("ELEVENLABS_SCRIBE_VAD_THRESHOLD", 0.4),
-          minSpeechDurationMs: getNumberEnv("ELEVENLABS_SCRIBE_MIN_SPEECH_DURATION_MS", 80),
-          minSilenceDurationMs: getNumberEnv("ELEVENLABS_SCRIBE_MIN_SILENCE_DURATION_MS", 80)
-        }
+        apiKey: getRequiredEnv("ELEVENLABS_API_KEY"),
+        modelId: process.env.ELEVENLABS_SCRIBE_MODEL_ID ?? "scribe_v2_realtime",
+        wsUrl: process.env.ELEVENLABS_SCRIBE_WS_URL ?? "wss://api.elevenlabs.io/v1/speech-to-text/realtime",
+        languageCode: process.env.ELEVENLABS_SCRIBE_LANGUAGE_CODE,
+        includeTimestamps: getBooleanEnv("ELEVENLABS_SCRIBE_INCLUDE_TIMESTAMPS", true),
+        includeLanguageDetection: getBooleanEnv("ELEVENLABS_SCRIBE_INCLUDE_LANGUAGE_DETECTION", true),
+        sampleRateHz: 24_000,
+        audioFormat: process.env.ELEVENLABS_SCRIBE_AUDIO_FORMAT ?? "pcm_24000",
+        commitStrategy: getScribeCommitStrategy(),
+        vadSilenceThresholdSecs: getNumberEnv("ELEVENLABS_SCRIBE_VAD_SILENCE_THRESHOLD_SECS", 0.45),
+        vadThreshold: getNumberEnv("ELEVENLABS_SCRIBE_VAD_THRESHOLD", 0.4),
+        minSpeechDurationMs: getNumberEnv("ELEVENLABS_SCRIBE_MIN_SPEECH_DURATION_MS", 80),
+        minSilenceDurationMs: getNumberEnv("ELEVENLABS_SCRIBE_MIN_SILENCE_DURATION_MS", 80)
+      }
       : undefined,
     elevenLabs: {
       apiKey: getRequiredEnv("ELEVENLABS_API_KEY"),

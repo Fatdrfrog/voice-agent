@@ -2,7 +2,7 @@
   "name": "voice-dev-agent",
   "private": true,
   "version": "0.1.0",
-  "description": "Voice-first coding assistant built around OpenClaw, ACP, and guarded execution.",
+  "description": "Voice-first coding assistant built around OpenClaw, ACP, and guarded execution on WINDOWS",
   "packageManager": "pnpm@9.0.0",
   "scripts": {
     "build:deps": "pnpm --filter @voice-dev-agent/contracts build && pnpm --filter @voice-dev-agent/openclaw-bridge build && pnpm --filter @voice-dev-agent/voice build && pnpm --filter @voice-dev-agent/orchestrator build",
