@@ -28,12 +28,18 @@ export const featureFlagsSchema = z.object({
 export type FeatureFlags = z.infer<typeof featureFlagsSchema>;
 
 export const gatewayConfigSchema = z.object({
-  binary: z.string().min(1).default("openclaw.cmd"),
+  binary: z.string().min(1).default("openclaw"),
+  binaryArgs: z.array(z.string()).default([]),
   gatewayUrl: z.string().min(1),
   gatewayToken: z.string().optional(),
   profile: z.string().optional()
 });
 export type GatewayConfig = z.infer<typeof gatewayConfigSchema>;
+
+export const sttProviderSchema = z
+  .enum(["openai-realtime", "elevenlabs-scribe"])
+  .default("openai-realtime");
+export type SttProvider = z.infer<typeof sttProviderSchema>;
 
 export const openAiRealtimeConfigSchema = z.object({
   apiKey: z.string().min(1),
@@ -42,11 +48,33 @@ export const openAiRealtimeConfigSchema = z.object({
 });
 export type OpenAiRealtimeConfig = z.infer<typeof openAiRealtimeConfigSchema>;
 
+export const elevenLabsScribeConfigSchema = z.object({
+  apiKey: z.string().min(1),
+  modelId: z.string().min(1).default("scribe_v2_realtime"),
+  wsUrl: z
+    .string()
+    .url()
+    .default("wss://api.elevenlabs.io/v1/speech-to-text/realtime"),
+  languageCode: z.string().min(2).max(10).optional(),
+  includeTimestamps: z.boolean().default(true),
+  includeLanguageDetection: z.boolean().default(true),
+  sampleRateHz: z.number().int().positive().default(24000),
+  audioFormat: z.string().min(1).default("pcm_24000"),
+  commitStrategy: z.enum(["manual", "vad"]).default("vad"),
+  vadSilenceThresholdSecs: z.number().positive().max(3).default(0.6),
+  vadThreshold: z.number().positive().max(0.9).default(0.4),
+  minSpeechDurationMs: z.number().int().positive().default(100),
+  minSilenceDurationMs: z.number().int().positive().default(100)
+});
+export type ElevenLabsScribeConfig = z.infer<typeof elevenLabsScribeConfigSchema>;
+
 export const elevenLabsConfigSchema = z.object({
   apiKey: z.string().min(1),
   voiceId: z.string().min(1),
-  modelId: z.string().min(1).default("eleven_multilingual_v2"),
-  baseUrl: z.string().url().default("https://api.elevenlabs.io")
+  modelId: z.string().min(1).default("eleven_flash_v2_5"),
+  baseUrl: z.string().url().default("https://api.elevenlabs.io"),
+  outputFormat: z.string().min(1).default("mp3_22050_32"),
+  voiceSpeed: z.number().min(0.7).max(1.2).default(1.05)
 });
 export type ElevenLabsConfig = z.infer<typeof elevenLabsConfigSchema>;
 
@@ -70,7 +98,9 @@ export type CallPolicy = z.infer<typeof callPolicySchema>;
 
 export const appConfigSchema = z.object({
   gateway: gatewayConfigSchema,
-  openAiRealtime: openAiRealtimeConfigSchema,
+  sttProvider: sttProviderSchema,
+  openAiRealtime: openAiRealtimeConfigSchema.optional(),
+  elevenLabsScribe: elevenLabsScribeConfigSchema.optional(),
   elevenLabs: elevenLabsConfigSchema,
   executionPolicy: executionPolicySchema,
   callPolicy: callPolicySchema,
@@ -97,6 +127,7 @@ export const voiceEventTypeSchema = z.enum([
   "transcript.final",
   "agent.reply",
   "tts.started",
+  "tts.interrupted",
   "tts.stopped",
   "approval.required",
   "error",

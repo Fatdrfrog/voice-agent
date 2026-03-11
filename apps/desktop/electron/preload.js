@@ -8,6 +8,7 @@ const api = {
   submitTranscript: (text) => ipcRenderer.invoke("voice:submit-transcript", text),
   pushAudioChunk: (chunk) => ipcRenderer.invoke("voice:audio-chunk", chunk),
   flushAudio: () => ipcRenderer.invoke("voice:flush-audio"),
+  interruptSpeech: () => ipcRenderer.invoke("voice:interrupt-speech"),
   listWorkspaces: () => ipcRenderer.invoke("workspace:list"),
   switchWorkspace: (workspaceId) => ipcRenderer.invoke("workspace:switch", workspaceId),
   fetchGatewayHealth: () => ipcRenderer.invoke("gateway:health"),

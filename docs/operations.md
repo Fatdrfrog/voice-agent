@@ -21,9 +21,12 @@ openclaw approvals get
 
 ## Voice Fails
 
-1. Check `OPENAI_API_KEY`, `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`.
-2. Verify microphone permission for Electron app.
-3. Inspect event log panel in the app.
+1. Check `VOICE_DEV_AGENT_STT_PROVIDER`.
+2. If STT provider is `openai-realtime`, verify `OPENAI_API_KEY`.
+3. If STT provider is `elevenlabs-scribe`, verify `ELEVENLABS_API_KEY`, `ELEVENLABS_SCRIBE_MODEL_ID`, and `ELEVENLABS_SCRIBE_WS_URL`.
+4. Verify `ELEVENLABS_VOICE_ID` for TTS.
+5. Verify microphone permission for Electron app.
+6. Inspect event log panel in the app.
 
 ## Call Fails
 

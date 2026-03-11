@@ -3,32 +3,7 @@ import { EventEmitter } from "node:events";
 import WebSocket from "ws";
 
 import type { OpenAiRealtimeConfig } from "@voice-dev-agent/contracts";
-
-export interface RealtimeTranscriptPartial {
-  type: "partial";
-  text: string;
-}
-
-export interface RealtimeTranscriptFinal {
-  type: "final";
-  text: string;
-}
-
-export interface RealtimeTranscriptError {
-  type: "error";
-  message: string;
-}
-
-export interface RealtimeTranscriptState {
-  type: "state";
-  state: "connecting" | "connected" | "closed";
-}
-
-export type RealtimeTranscriptEvent =
-  | RealtimeTranscriptPartial
-  | RealtimeTranscriptFinal
-  | RealtimeTranscriptError
-  | RealtimeTranscriptState;
+import type { RealtimeTranscriptEvent } from "./stt-types.js";
 
 function encodeInt16Pcm(chunk: Int16Array): string {
   return Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength).toString("base64");

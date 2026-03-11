@@ -3,11 +3,14 @@ import type { ElevenLabsConfig } from "@voice-dev-agent/contracts";
 interface ElevenLabsSynthesisOptions {
   modelId?: string;
   outputFormat?: string;
+  previousText?: string;
+  nextText?: string;
   voiceSettings?: {
     stability?: number;
     similarityBoost?: number;
     style?: number;
     useSpeakerBoost?: boolean;
+    speed?: number;
   };
 }
 
@@ -18,11 +21,16 @@ export class ElevenLabsTtsClient {
     this.config = config;
   }
 
-  public async synthesize(text: string, options: ElevenLabsSynthesisOptions = {}): Promise<Buffer> {
+  public async synthesize(
+    text: string,
+    options: ElevenLabsSynthesisOptions = {},
+    signal?: AbortSignal
+  ): Promise<Buffer> {
     const endpoint = `${this.config.baseUrl}/v1/text-to-speech/${this.config.voiceId}/stream`;
 
     const response = await fetch(endpoint, {
       method: "POST",
+      ...(signal ? { signal } : {}),
       headers: {
         "Content-Type": "application/json",
         Accept: "audio/mpeg",
@@ -31,12 +39,15 @@ export class ElevenLabsTtsClient {
       body: JSON.stringify({
         text,
         model_id: options.modelId ?? this.config.modelId,
-        output_format: options.outputFormat ?? "mp3_44100_128",
+        output_format: options.outputFormat ?? this.config.outputFormat,
+        previous_text: options.previousText,
+        next_text: options.nextText,
         voice_settings: {
           stability: options.voiceSettings?.stability ?? 0.45,
           similarity_boost: options.voiceSettings?.similarityBoost ?? 0.75,
           style: options.voiceSettings?.style ?? 0.2,
-          use_speaker_boost: options.voiceSettings?.useSpeakerBoost ?? true
+          use_speaker_boost: options.voiceSettings?.useSpeakerBoost ?? true,
+          speed: options.voiceSettings?.speed ?? this.config.voiceSpeed
         }
       })
     });

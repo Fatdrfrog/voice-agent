@@ -10,6 +10,7 @@ declare global {
       submitTranscript(text: string): Promise<void>;
       pushAudioChunk(chunk: number[]): Promise<void>;
       flushAudio(): Promise<void>;
+      interruptSpeech(): Promise<void>;
       listWorkspaces(): Promise<WorkspaceConfig[]>;
       switchWorkspace(workspaceId: string): Promise<void>;
       fetchGatewayHealth(): Promise<void>;

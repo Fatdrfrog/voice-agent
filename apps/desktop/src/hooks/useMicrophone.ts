@@ -1,13 +1,31 @@
 import { useCallback, useRef } from "react";
 
-function float32ToInt16(input: Float32Array): number[] {
-  const output = new Int16Array(input.length);
-  for (let index = 0; index < input.length; index += 1) {
-    const sample = Math.max(-1, Math.min(1, input[index] ?? 0));
-    output[index] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+const WORKLET_CHUNK_SIZE = 2048;
+const WORKLET_MODULE_URL = new URL("../worklets/microphone-processor.js", import.meta.url).toString();
+
+interface WorkletMessage {
+  type?: "chunk" | "flush-complete";
+  chunk?: Int16Array | ArrayBuffer | number[];
+}
+
+function toChunkArray(chunk: WorkletMessage["chunk"]): number[] | null {
+  if (!chunk) {
+    return null;
   }
 
-  return Array.from(output);
+  if (chunk instanceof Int16Array) {
+    return Array.from(chunk);
+  }
+
+  if (chunk instanceof ArrayBuffer) {
+    return Array.from(new Int16Array(chunk));
+  }
+
+  if (Array.isArray(chunk)) {
+    return chunk;
+  }
+
+  return null;
 }
 
 interface UseMicrophoneOptions {
@@ -20,12 +38,39 @@ export function useMicrophone(options: UseMicrophoneOptions): {
   stopMic: () => Promise<void>;
 } {
   const streamRef = useRef<MediaStream | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const processorRef = useRef<AudioWorkletNode | null>(null);
+  const flushResolverRef = useRef<(() => void) | null>(null);
 
   const stopMic = useCallback(async () => {
-    processorRef.current?.disconnect();
-    processorRef.current = null;
+    if (processorRef.current) {
+      const processor = processorRef.current;
+
+      try {
+        const flushPromise = new Promise<void>((resolve) => {
+          flushResolverRef.current = resolve;
+        });
+        processor.port.postMessage({ type: "flush" });
+        await Promise.race([
+          flushPromise,
+          new Promise<void>((resolve) => {
+            window.setTimeout(resolve, 75);
+          })
+        ]);
+      } catch {
+        // Best-effort flush before teardown.
+      } finally {
+        flushResolverRef.current = null;
+      }
+
+      processor.port.onmessage = null;
+      processor.disconnect();
+      processorRef.current = null;
+    }
+
+    sourceRef.current?.disconnect();
+    sourceRef.current = null;
 
     if (audioContextRef.current) {
       await audioContextRef.current.close();
@@ -57,18 +102,44 @@ export function useMicrophone(options: UseMicrophoneOptions): {
       });
 
       const audioContext = new AudioContext({ sampleRate: 24_000 });
-      const source = audioContext.createMediaStreamSource(stream);
-      const processor = audioContext.createScriptProcessor(2048, 1, 1);
+      await audioContext.audioWorklet.addModule(WORKLET_MODULE_URL);
+      await audioContext.resume();
 
-      processor.onaudioprocess = (event) => {
-        const channelData = event.inputBuffer.getChannelData(0);
-        options.onChunk(float32ToInt16(channelData));
+      const source = audioContext.createMediaStreamSource(stream);
+      const processor = new AudioWorkletNode(audioContext, "microphone-pcm-processor", {
+        numberOfInputs: 1,
+        numberOfOutputs: 0,
+        channelCount: 1,
+        channelCountMode: "explicit",
+        processorOptions: {
+          chunkSize: WORKLET_CHUNK_SIZE
+        }
+      });
+
+      processor.port.onmessage = (event: MessageEvent<WorkletMessage>) => {
+        const payload = event.data;
+        if (payload?.type === "flush-complete") {
+          if (flushResolverRef.current) {
+            flushResolverRef.current();
+            flushResolverRef.current = null;
+          }
+          return;
+        }
+
+        if (payload?.type !== "chunk") {
+          return;
+        }
+
+        const normalizedChunk = toChunkArray(payload.chunk);
+        if (normalizedChunk && normalizedChunk.length > 0) {
+          options.onChunk(normalizedChunk);
+        }
       };
 
       source.connect(processor);
-      processor.connect(audioContext.destination);
 
       streamRef.current = stream;
+      sourceRef.current = source;
       audioContextRef.current = audioContext;
       processorRef.current = processor;
     } catch (error) {

@@ -1,11 +1,12 @@
 # Voice Dev Agent
 
-Voice-first coding assistant built around OpenClaw, ACP, OpenAI Realtime STT, and ElevenLabs TTS.
+Voice-first coding assistant built around OpenClaw, ACP, configurable realtime STT (OpenAI or ElevenLabs Scribe), and ElevenLabs TTS.
 
 ## Quick Start
 
 1. Copy `.env.example` to `.env` and fill API keys and gateway settings.
    - Mic-only mode default: `VOICE_DEV_AGENT_CALL_MODE=false`
+   - STT default: `VOICE_DEV_AGENT_STT_PROVIDER=openai-realtime`
 2. Configure workspace allowlist in `config/workspaces.json`.
 3. Install dependencies:
    - `pnpm install`

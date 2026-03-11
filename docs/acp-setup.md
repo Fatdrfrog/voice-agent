@@ -8,6 +8,11 @@ Example session key:
 
 - `agent:main:ice-core-ai`
 
+Note:
+
+- This ACP session key is not the same thing as the `openclaw agent --session-id` flag.
+- ACP uses a stable session key string; the OpenClaw `agent` CLI expects an explicit session id or an agent target.
+
 ## Zed
 
 Add generated snippet from desktop app into Zed `settings.json` under `agent_servers`.

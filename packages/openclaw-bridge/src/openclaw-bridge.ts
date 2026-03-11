@@ -33,6 +33,7 @@ export class OpenClawBridge {
 
     const normalized: OpenClawBridgeConfig = {
       binary: config.binary,
+      binaryArgs: config.binaryArgs ?? [],
       gatewayUrl: config.gatewayUrl,
       defaultTimeoutMs: config.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS,
       retries: config.retries ?? DEFAULT_RETRIES
@@ -46,26 +47,33 @@ export class OpenClawBridge {
   }
 
   public async agentTurn(request: AgentTurnRequest): Promise<AgentTurnResponse> {
-    const args = [
-      "agent",
-      "--session-id",
-      request.sessionKey,
-      "--message",
-      request.text,
-      "--json"
-    ];
-
-    const result = await this.runWithRetry(args, { timeoutMs: 120_000 });
-    const payload = this.parseJson<{ response?: string; text?: string; toolSummary?: string; raw?: unknown }>(result.stdout);
+    const result = await this.runAgentTurnCommand(request);
+    const payload = this.parseJson<Record<string, unknown>>(result.stdout);
+    const text = this.extractAgentText(payload);
+    const toolSummary = this.extractToolSummary(payload);
 
     const normalized = {
-      text: payload.response ?? payload.text ?? "",
-      toolSummary: payload.toolSummary,
-      riskLevel: this.inferRiskLevel(payload.response ?? payload.text ?? ""),
-      raw: payload.raw ?? payload
+      text,
+      toolSummary,
+      riskLevel: this.inferRiskLevel(text),
+      raw: payload
     };
 
     return agentTurnResponseSchema.parse(normalized);
+  }
+
+  private async runAgentTurnCommand(request: AgentTurnRequest): Promise<CommandResult> {
+    const agentId = this.extractAgentIdFromSessionKey(request.sessionKey);
+    if (agentId) {
+      return this.runWithRetry(["agent", "--agent", agentId, "--message", request.text, "--json"], {
+        timeoutMs: 120_000
+      });
+    }
+
+    return this.runWithRetry(
+      ["agent", "--session-id", request.sessionKey, "--message", request.text, "--json"],
+      { timeoutMs: 120_000 }
+    );
   }
 
   public async getHealth(): Promise<OpenClawHealth> {
@@ -167,6 +175,61 @@ export class OpenClawBridge {
     return "low";
   }
 
+  private extractAgentText(payload: Record<string, unknown>): string {
+    const response = payload.response;
+    if (typeof response === "string" && response.trim()) {
+      return response.trim();
+    }
+
+    const text = payload.text;
+    if (typeof text === "string" && text.trim()) {
+      return text.trim();
+    }
+
+    const result = payload.result;
+    if (result && typeof result === "object") {
+      const payloads = (result as { payloads?: unknown }).payloads;
+      if (Array.isArray(payloads)) {
+        const texts = payloads
+          .map((entry) => {
+            if (!entry || typeof entry !== "object") {
+              return "";
+            }
+
+            const value = (entry as { text?: unknown }).text;
+            return typeof value === "string" ? value.trim() : "";
+          })
+          .filter(Boolean);
+
+        if (texts.length > 0) {
+          return texts.join("\n\n");
+        }
+      }
+    }
+
+    return "";
+  }
+
+  private extractToolSummary(payload: Record<string, unknown>): string | undefined {
+    const direct = payload.toolSummary;
+    if (typeof direct === "string" && direct.trim()) {
+      return direct.trim();
+    }
+
+    const result = payload.result;
+    if (!result || typeof result !== "object") {
+      return undefined;
+    }
+
+    const nested = (result as { toolSummary?: unknown }).toolSummary;
+    return typeof nested === "string" && nested.trim() ? nested.trim() : undefined;
+  }
+
+  private extractAgentIdFromSessionKey(sessionKey: string): string | null {
+    const match = /^agent:([^:]+):/.exec(sessionKey);
+    return match?.[1] ?? null;
+  }
+
   private async runWithRetry(
     args: string[],
     options: { timeoutMs?: number; retries?: number }
@@ -207,12 +270,20 @@ export class OpenClawBridge {
         env.OPENCLAW_GATEWAY_TOKEN = this.config.gatewayToken;
       }
 
-      const child = spawn(this.config.binary, args, {
-        cwd: process.cwd(),
-        windowsHide: true,
-        shell: true,
-        env
-      });
+      const commandArgs = [...(this.config.binaryArgs ?? []), ...args];
+      const child = process.platform === "win32"
+        ? spawn(this.buildWindowsShellCommand(this.config.binary, commandArgs), {
+            cwd: process.cwd(),
+            windowsHide: true,
+            shell: true,
+            env
+          })
+        : spawn(this.config.binary, commandArgs, {
+            cwd: process.cwd(),
+            windowsHide: true,
+            shell: false,
+            env
+          });
 
       let stdout = "";
       let stderr = "";
@@ -260,10 +331,13 @@ export class OpenClawBridge {
 
         const normalizedExit = exitCode ?? -1;
         if (normalizedExit !== 0) {
+          const detail = this.extractFailureDetail(stdout, stderr);
           reject(
             new BridgeError(
               "NON_ZERO_EXIT",
-              `OpenClaw exited with code ${normalizedExit} (${token}).`,
+              detail
+                ? `OpenClaw exited with code ${normalizedExit} (${token}): ${detail}`
+                : `OpenClaw exited with code ${normalizedExit} (${token}).`,
               stdout,
               stderr
             )
@@ -278,5 +352,31 @@ export class OpenClawBridge {
         });
       });
     });
+  }
+
+  private buildWindowsShellCommand(binary: string, args: string[]): string {
+    return [binary, ...args].map((part) => this.quoteWindowsShellArg(part)).join(" ");
+  }
+
+  private quoteWindowsShellArg(value: string): string {
+    if (!value) {
+      return "\"\"";
+    }
+
+    if (!/[\s"]/u.test(value)) {
+      return value;
+    }
+
+    return `"${value.replace(/"/g, '\\"')}"`;
+  }
+
+  private extractFailureDetail(stdout: string, stderr: string): string {
+    const normalized = sanitizeCliText(stderr || stdout);
+    if (!normalized) {
+      return "";
+    }
+
+    const lines = normalized.split("\n").map((line) => line.trim()).filter(Boolean);
+    return lines.slice(-3).join(" | ");
   }
 }

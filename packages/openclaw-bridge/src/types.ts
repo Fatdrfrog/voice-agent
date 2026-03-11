@@ -32,6 +32,7 @@ export interface CommandResult {
 
 export interface OpenClawBridgeConfig {
   binary: string;
+  binaryArgs?: string[];
   gatewayUrl: string;
   gatewayToken?: string;
   defaultTimeoutMs: number;
